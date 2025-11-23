@@ -1,0 +1,91 @@
+services:
+  # PostgreSQL Database for Testing
+  postgres:
+    image: postgres:16-alpine
+    container_name: teapot-test-postgres
+    environment:
+      POSTGRES_USER: teapot
+      POSTGRES_PASSWORD: teapot123
+      POSTGRES_DB: teapot_users
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"  # Using different port to avoid conflicts with dev
+    networks:
+      - teapot-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teapot"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - teapot-test-postgres-data:/var/lib/postgresql/data
+
+  # Redis Cache for Testing
+  redis:
+    image: redis:7-alpine
+    container_name: teapot-test-redis
+    ports:
+      - "6380:6379"  # Using different port to avoid conflicts with dev
+    networks:
+      - teapot-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - teapot-test-redis-data:/data
+
+  # User Service (Go Backend) for Testing
+  # Note: Build this image first using: cd ../tea-pot-platform-builder && make build-user-service
+  user-service:
+    image: teapot/user-service:latest
+    container_name: teapot-test-user-service
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      # Server Configuration
+      PORT: 8080
+      ENV: test
+      
+      # Database Configuration
+      DATABASE_URL: postgres://teapot:teapot123@postgres:5432/teapot_users?sslmode=disable
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: teapot
+      DB_PASSWORD: teapot123
+      DB_NAME: teapot_users
+      DB_SSLMODE: disable
+      
+      # Redis Configuration
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      
+      # API Configuration
+      API_PREFIX: /api/v1
+      CORS_ENABLED: "true"
+      CORS_ORIGINS: "*"
+      
+      # Logging
+      LOG_LEVEL: debug
+      LOG_FORMAT: json
+    ports:
+      - "8081:8080"  # Using different port to avoid conflicts with dev
+    networks:
+      - teapot-test-network
+
+networks:
+  teapot-test-network:
+    name: teapot-test-network
+    driver: bridge
+
+volumes:
+  teapot-test-postgres-data:
+    name: teapot-test-postgres-data
+  teapot-test-redis-data:
+    name: teapot-test-redis-data
