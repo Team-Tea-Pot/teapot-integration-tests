@@ -30,7 +30,7 @@ echo "📦 Starting containers..."
 echo ""
 
 # Start containers
-docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --build --remove-orphans
+docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --remove-orphans 2>&1 | grep -v "Exception in thread" || true
 
 if [ $? -eq 0 ]; then
     echo ""

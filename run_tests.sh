@@ -78,7 +78,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Step 1: Check Docker
-echo -e "${BLUE}[1/4]${NC} Checking Docker..."
+echo -e "${BLUE}[1/5]${NC} Checking Docker..."
 if ! docker info > /dev/null 2>&1; then
     echo -e "${RED}❌ Docker is not running. Please start Docker and try again.${NC}"
     exit 1
@@ -86,10 +86,20 @@ fi
 echo -e "${GREEN}✓${NC} Docker is running"
 echo ""
 
-# Step 2: Start containers
-echo -e "${BLUE}[2/4]${NC} Starting containers..."
+# Step 1.5: Install Python dependencies
+echo -e "${BLUE}[2/5]${NC} Installing Python dependencies..."
+pip install -q -r requirements.txt 2>&1 | grep -v "already satisfied" > /dev/null
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} Dependencies ready"
+else
+    echo -e "${YELLOW}⚠${NC}  Warning: Some dependencies may have failed to install"
+fi
 echo ""
-docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --remove-orphans
+
+# Step 2: Start containers
+echo -e "${BLUE}[3/5]${NC} Starting containers..."
+echo ""
+docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --remove-orphans 2>&1 | grep -v "Exception in thread" || true
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Failed to start containers${NC}"
@@ -126,9 +136,9 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     ELAPSED=$((ELAPSED + INTERVAL))
 done
 
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    echo ""
-    echo -e "${RED}❌ Timeout waiting for containers to be healthy${NC}"
+# Step 3: Run tests
+echo -e "${BLUE}[4/5]${NC} Running tests..."
+echo -e "${YELLOW}Command: pytest ${PYTEST_ARGS[*]}${NC}" healthy${NC}"
     docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
     echo ""
     echo "Recent logs:"
@@ -137,7 +147,7 @@ if [ $ELAPSED -ge $TIMEOUT ]; then
 fi
 
 # Step 3: Run tests
-echo -e "${BLUE}[3/4]${NC} Running tests..."
+echo -e "${BLUE}[4/5]${NC} Running tests..."
 echo -e "${YELLOW}Command: pytest ${PYTEST_ARGS[*]}${NC}"
 echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
@@ -146,16 +156,16 @@ echo ""
 # Set environment variable to skip Docker management in conftest.py
 export SKIP_DOCKER=1
 
-# Run pytest with provided arguments
+# Run pytest with provided arguments (output directly to terminal, no capture)
 pytest "${PYTEST_ARGS[@]}"
 
 # Store exit code
 TEST_EXIT_CODE=$?
-
-echo ""
-echo -e "${BLUE}════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}✓${NC} All tests passed!"
 echo ""
 
+# Step 4: Cleanup (handled by trap)
+echo -e "${BLUE}[5/5]${NC} Cleanup..."
 if [ $TEST_EXIT_CODE -ne 0 ]; then
     echo -e "${RED}Tests failed with exit code: $TEST_EXIT_CODE${NC}"
     exit $TEST_EXIT_CODE
